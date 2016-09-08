@@ -82,6 +82,7 @@ class RSW_Boundaries {
 */
 class RSW_splice {
  public:
+  long int splLen;            // length of the splice, added for aaron's custom check-novel
   const char * id;       // id of a read this junction is based on
   const char * geneName; //
   int geneUnknown;       // is this junction within a gene or outside of known genes
