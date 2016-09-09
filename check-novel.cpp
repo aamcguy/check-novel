@@ -8,11 +8,11 @@
 #include <vector>
 #include <math.h>
 
-#if _POSIX_C_SOURCE < 2
-#define _POSIX_C_SOURCE 2
+#if _POSIX_C_SOURCE < 200809L
+#define _POSIX_C_SOURCE 200809L
 #endif
 #include <unistd.h>
-#include "RSW.h"
+#include "check-novel.h"
 using namespace std;
 
 // Variables needed for getopt
@@ -23,7 +23,6 @@ extern int optind, opterr, optopt;
 const char *optstring = "c:d:f:i:j:l:v";
 char sLine[MAX_LINE+1];
 unordered_set<string> stringTable;
-//vector<RSW_Known> data_known;
 vector<struct RSW_Boundaries> data_boundaries;
 vector<struct RSW_splice *> data_splice;
 const int supportPosTolerance = 5;						/// change this if necessary
@@ -60,26 +59,20 @@ int main( int argc, char *argv[] )
 	if( verbose ) {
 		printf("Done reading from boundary file.\n");
 	}
-
-	printf("1\n");
 	if( ifile_name == NULL ) {
 		ifile = fdopen(0, "r");
 	}
 	else {
 		ifile = fopen(ifile_name, "r");
 	}
-	printf("2\n");
 	if( ifile == NULL ) {
 		perror("fopen/fdopen");
 		exit(EXIT_FAILURE);
 	}
-	printf("3\n");
 	if( proc_splices(ifile, verbose, chr_col, i_col, j_col, len_col, delimit) < 1 ) {
 		fprintf(stderr,"Was unable to process input file, probably due to line length.\n");
 	}
-	printf("4\n");
 	fclose(ifile);
-	printf("5\n");
 }
 
 //int get_line(FILE *f, char s[], int maxChars)
@@ -93,6 +86,7 @@ int proc_splices( FILE *ifile, int verbose, int c, int i, int j, int len, char *
 	char *token;
 	char *temp_line;
 
+	//FILE *ofile = fdopen(1, "w");
 	temp_line = NULL;
 	token = NULL;
 
@@ -108,6 +102,7 @@ int proc_splices( FILE *ifile, int verbose, int c, int i, int j, int len, char *
 			continue;
 		}
 		do {
+			//printf("cnt: %d, token: %s\n", cnt, token);
 			if( cnt == c ) {
 				rs.chromosome = strdup(token);
 			}
@@ -123,31 +118,48 @@ int proc_splices( FILE *ifile, int verbose, int c, int i, int j, int len, char *
 			cnt++;
 			token = strtok(NULL, delim);
 		} while( token != NULL );
+		//printf("2nd templine: %s\n", temp_line);
 		// It goes here
 		if( len == -1 ) {
 			rs.splLen = abs( rs.maxLargeSupport - rs.minSmallSupport );
 		}
-		int a;
+		//printf("chr: %s, minSmall: %ld, maxLarge: %ld, splLen: %ld\n", rs.chromosome, rs.minSmallSupport, rs.maxLargeSupport, rs.splLen);
+		//printf("bound_size = %d\n", data_boundaries.size());
+		int a = 0;
 		rs.novel = true;
 		for(a=0; a < data_boundaries.size(); a++) {
-			if (rs.splLen != data_boundaries[a].length) continue;
-			if (abs(rs.minSmallSupport-data_boundaries[a].position1) <= supportPosTolerance &&
-					abs(rs.maxLargeSupport-data_boundaries[a].position2) <= supportPosTolerance)
+			//printf("length: %d, pos1: %ld, pos2: %ld supportPosTolerance: %d\n", data_boundaries[a].length, data_boundaries[a].position1, data_boundaries[a].position2, supportPosTolerance);
+			if (rs.splLen != data_boundaries[a].length) {
+				continue;
+			}
+			if (abs(rs.minSmallSupport-data_boundaries[a].position1) <= supportPosTolerance && abs(rs.maxLargeSupport-data_boundaries[a].position2) <= supportPosTolerance) {
 				break;
+			}
 		}
 		if (a < data_boundaries.size()) { // if found in the boundaries data, not novel
+			//fprintf(stderr, "Should be false\n");
 			rs.novel = false;
 		}
 		//TODO:  this messes your output up if you use multiple delimiters
-		printf("%s",temp_line);
-		/*printf("%s", delim);
-		printf("end\n");*/
-		//printf("%d\n", rs.novel);
+
+		//printf("%s,%s\n",temp_line, (rs.novel) ? "Novel" : "*" );
+		//printf("%s,%s\n",temp_line, (rs.novel) ? "Novel" : "*" );
+		//size_t fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream);
+		fwrite(temp_line, sizeof(char), strlen(temp_line) /*- 1*/, stdout);
+		fwrite(delim, sizeof(char), 1, stdout);
+		if( rs.novel == true ) {
+			fwrite("Novel\n", sizeof(char), 6, stdout);
+		} else {
+			fwrite("*\n", sizeof(char), 2, stdout);
+		}
 		// It goes here END
+		sLine[0] = '\0';
 	}
-	if( status < 1 ) {
+	if( status < 0 ) {
+		//fclose(ofile);
 		return -1;
 	}
+	//fclose(ofile);
 	return 1;
 }
 
@@ -251,6 +263,13 @@ int proc_options( int argc, char *argv[], int *v, char **del, int *c, int *i, in
 	int opt;
 	if( argc < 2 ) {
 		fprintf(stdout,"usage: check-novel [-cdfijv] <refflat_file>\n");
+		fprintf(stdout,"  -d : delimiter <char> , default='<tab>' , only enter 1 character\n");
+		fprintf(stdout,"  -c : chromosome column <int> , default = 0\n");
+		fprintf(stdout,"  -i : start-index col <int> , default = 1\n");
+		fprintf(stdout,"  -f : input filename <string> , default = stdin\n");
+		fprintf(stdout,"  -j : end-index col <int> , default = 2\n");
+		fprintf(stdout,"  -l : splice-length column <int> , default: calculated from end-index, start-index\n");
+		fprintf(stdout,"  -v : verbose mode\n");
 		return -1;
 	}
 	while( (opt = getopt(argc, argv, optstring)) != -1 ) {
@@ -296,6 +315,9 @@ int proc_options( int argc, char *argv[], int *v, char **del, int *c, int *i, in
 	*c = (*c == -1) ? 0 : *c;
 	*i = (*i == -1 ) ? 1 : *i;
 	*j = (*j == -1 ) ? 2 : *j;
+	if( *del == NULL ) {
+		*del = strdup("\t");
+	}
 	return 1;
 }
 
