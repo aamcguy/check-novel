@@ -95,7 +95,7 @@ int proc_splices( FILE *ifile, int verbose, int c, int i, int j, int len, char *
 			free(temp_line);
 		}
 		temp_line = strdup( sLine );
-		printf("temp_line: %s\n", temp_line);
+		//printf("temp_line: %s\n", temp_line);
 		token = strtok(sLine, delim);
 		cnt = 0;
 		if( token == NULL ) {
